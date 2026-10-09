@@ -1,5 +1,6 @@
 const userModel = require("../models/user.model.js");
 const jwt = require("jsonwebtoken");
+const emailService = require("../services/email.services.js");
 
 async function userRegisterController(req, res) {
   const { email, username, password } = req.body;
@@ -15,7 +16,7 @@ async function userRegisterController(req, res) {
     });
   }
 
-  const user = userModel.create({
+  const user = await userModel.create({
     email,
     password,
     username,
@@ -25,22 +26,25 @@ async function userRegisterController(req, res) {
     expiresIn: "3d",
   });
 
-  cookie("token", token);
+  await emailService.sendRegistrationEmail(user.email, user.username);
+
+  res.cookie("token", token, { httpOnly: true, sameSite: "strict" });
 
   res.status(201).json({
     user: {
       _id: user._id,
       email: user.email,
-      name: user.name,
+      username: user.username,
     },
     token,
   });
+
 }
 
 async function userLoginController(req, res) {
   const { email, password } = req.body;
 
-  const user = await userModel.findOne({ email });
+  const user = await userModel.findOne({ email }).select("+password");
 
   if (!user) {
     return res.status(401).json({
@@ -48,7 +52,7 @@ async function userLoginController(req, res) {
     });
   }
 
-  const validPassword = user.comparepassword(password);
+  const validPassword = await user.comparepassword(password);
 
   if (!validPassword) {
     return res.status(401).json({
@@ -60,14 +64,17 @@ async function userLoginController(req, res) {
     expiresIn: "3d",
   });
 
-  cookie("token", token);
+  res.cookie("token", token, { httpOnly: true, sameSite: "strict" });
 
   res.status(200).json({
     user: {
       _id: user._id,
       email: user.email,
-      name: user.name,
+      username: user.username,
     },
     token,
   });
 }
+
+
+module.exports = {userRegisterController,userLoginController};
